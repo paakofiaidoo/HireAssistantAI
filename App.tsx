@@ -15,21 +15,19 @@ import {
   Loader2,
   Check,
   ShieldCheck,
-  ClipboardList
+  ClipboardList,
+  ListFilter
 } from 'lucide-react';
 import { SmtpConfig, ResumeData, JobType, JobApplication, AutomatedJob } from './types';
 import { extractTextFromPdf } from './utils/pdf';
 import { analyzeResume, generateJobEmail, suggestResumeImprovements, rewriteResumeWithImprovements } from './geminiService';
 import { db } from './db';
 
-const TEST_SENDER = "paakofiaidoo17@gmail.com";
-const TEST_RECIPIENT = "aidoopaakofi17@gmail.com";
-
 const App: React.FC = () => {
   const [smtpConfig, setSmtpConfig] = useState<SmtpConfig>({ email: '', appPassword: '', isConfigured: false });
   const [resume, setResume] = useState<ResumeData | null>(null);
   const [automatedJobs, setAutomatedJobs] = useState<AutomatedJob[]>([]);
-  const [recipientEmail, setRecipientEmail] = useState(TEST_RECIPIENT);
+  const [recipientEmail, setRecipientEmail] = useState('');
   const [isDbLoaded, setIsDbLoaded] = useState(false);
   const [sendProgress, setSendProgress] = useState<string>('');
 
@@ -44,8 +42,6 @@ const App: React.FC = () => {
       ]);
       
       if (savedSmtp) setSmtpConfig(savedSmtp);
-      else setSmtpConfig(prev => ({ ...prev, email: TEST_SENDER })); // Pre-fill test sender
-
       if (savedResume) setResume(savedResume);
       if (savedJobs) setAutomatedJobs(savedJobs);
       if (savedRecipient) setRecipientEmail(savedRecipient);
@@ -96,7 +92,7 @@ const App: React.FC = () => {
       const analysis = await analyzeResume(text);
       setResume({ 
         fileName: file.name, 
-        fileBlob: file, // Store the blob for persistence
+        fileBlob: file, 
         content: text, 
         analysis 
       });
@@ -115,6 +111,11 @@ const App: React.FC = () => {
     if (!resume) {
       alert("Please upload your resume first.");
       setActiveTab('resume');
+      return;
+    }
+
+    if (!desc) {
+      alert("Job description is missing.");
       return;
     }
 
@@ -161,6 +162,10 @@ const App: React.FC = () => {
         analysis: newAnalysis
       });
       setImprovements(null);
+      alert("Resume updated with improvements!");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to apply improvements.");
     } finally {
       setIsImproving(false);
     }
@@ -215,7 +220,7 @@ const App: React.FC = () => {
           <AutomateTab 
             onApply={(job) => {
               setJobDescription(job.description);
-              handleGenerate({ ...application, description: job.description, sourceJobId: job.id });
+              handleGenerate({ description: job.description, sourceJobId: job.id });
             }} 
             jobs={automatedJobs}
             setJobs={setAutomatedJobs}
@@ -229,7 +234,7 @@ const App: React.FC = () => {
                 {activeTab === 'resume' ? 'Resume Command Center' : 'Application Launcher'}
               </h2>
               <p className="text-gray-500 dark:text-gray-400 text-lg">
-                {activeTab === 'resume' ? 'Manage your persisted profile and AI enhancements.' : 'Send targeted applications to ' + recipientEmail}
+                {activeTab === 'resume' ? 'Manage your persisted profile and AI enhancements.' : 'Configure and dispatch your next career opportunity.'}
               </p>
             </header>
 
@@ -345,7 +350,7 @@ const App: React.FC = () => {
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-gray-500 uppercase tracking-tighter pl-1">Recipient Email</label>
-                      <input type="text" value={recipientEmail} onChange={(e) => setRecipientEmail(e.target.value)} placeholder="aidoopaakofi17@gmail.com" className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold dark:text-white transition-all" />
+                      <input type="text" value={recipientEmail} onChange={(e) => setRecipientEmail(e.target.value)} placeholder="hr@company.com" className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold dark:text-white transition-all" />
                     </div>
                   </div>
 
@@ -394,9 +399,9 @@ const App: React.FC = () => {
             </div>
             <div className="space-y-3 max-w-lg">
               <h2 className="text-3xl font-bold dark:text-white">Email Sent Successfully!</h2>
-              <p className="text-gray-500 dark:text-gray-400 text-lg">Sent from <strong>{smtpConfig.email}</strong> to <strong>{application?.recipientEmail}</strong>. Test case complete.</p>
+              <p className="text-gray-500 dark:text-gray-400 text-lg">Your application has been dispatched via SMTP. Response tracking enabled.</p>
             </div>
-            <button onClick={() => { setView('form'); setActiveTab('automate'); }} className="px-8 py-4 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg transition-all hover:-translate-y-1 active:scale-95">Done</button>
+            <button onClick={() => { setView('form'); setActiveTab('automate'); }} className="px-8 py-4 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg transition-all hover:-translate-y-1 active:scale-95">Return to Dashboard</button>
           </div>
         )}
       </div>

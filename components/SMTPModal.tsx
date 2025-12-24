@@ -10,16 +10,14 @@ interface SMTPModalProps {
   onSave: (config: SmtpConfig) => void;
 }
 
-const TEST_SENDER = "paakofiaidoo17@gmail.com";
-
 export const SMTPModal: React.FC<SMTPModalProps> = ({ isOpen, onClose, config, onSave }) => {
-  const [email, setEmail] = useState(config.email || TEST_SENDER);
-  const [appPassword, setAppPassword] = useState(config.appPassword);
+  const [email, setEmail] = useState(config.email || '');
+  const [appPassword, setAppPassword] = useState(config.appPassword || '');
 
   useEffect(() => {
     if (isOpen) {
-      setEmail(config.email || TEST_SENDER);
-      setAppPassword(config.appPassword);
+      setEmail(config.email || '');
+      setAppPassword(config.appPassword || '');
     }
   }, [isOpen, config]);
 
@@ -29,7 +27,7 @@ export const SMTPModal: React.FC<SMTPModalProps> = ({ isOpen, onClose, config, o
     onSave({
       email,
       appPassword,
-      isConfigured: email !== '' && appPassword !== ''
+      isConfigured: email.trim() !== '' && appPassword.trim() !== ''
     });
     onClose();
   };
@@ -72,7 +70,7 @@ export const SMTPModal: React.FC<SMTPModalProps> = ({ isOpen, onClose, config, o
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 dark:text-white outline-none font-bold"
-                placeholder="paakofiaidoo17@gmail.com"
+                placeholder="your.email@gmail.com"
               />
             </div>
 
