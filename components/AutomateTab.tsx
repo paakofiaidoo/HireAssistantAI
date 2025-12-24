@@ -15,7 +15,10 @@ import {
   Cpu,
   Linkedin,
   Building,
-  ArrowUpRight
+  ArrowUpRight,
+  PlayCircle,
+  Loader2,
+  Sparkles
 } from 'lucide-react';
 import { AutomatedJob } from '../types';
 import { extractJobsFromHtml } from '../utils/scraper';
@@ -23,9 +26,10 @@ import { extractJobsFromRawHtml } from '../geminiService';
 import { db } from '../db';
 
 interface AutomateTabProps {
-  onApply: (job: AutomatedJob) => void;
+  onApply: (job: AutomatedJob) => Promise<void>;
   jobs: AutomatedJob[];
   setJobs: (jobs: AutomatedJob[]) => void;
+  isGenerating: boolean;
 }
 
 type FilterType = 'all' | AutomatedJob['status'];
@@ -39,8 +43,9 @@ const PROVIDERS = [
   { id: 'glassdoor', name: 'Glassdoor', active: false, icon: Globe },
 ];
 
-export const AutomateTab: React.FC<AutomateTabProps> = ({ onApply, jobs, setJobs }) => {
+export const AutomateTab: React.FC<AutomateTabProps> = ({ onApply, jobs, setJobs, isGenerating }) => {
   const [loading, setLoading] = useState(false);
+  const [processingId, setProcessingId] = useState<string | null>(null);
   const [htmlInput, setHtmlInput] = useState('');
   const [showManualInput, setShowManualInput] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
@@ -111,6 +116,25 @@ export const AutomateTab: React.FC<AutomateTabProps> = ({ onApply, jobs, setJobs
     }
   };
 
+  const handleSingleApply = async (job: AutomatedJob) => {
+    setProcessingId(job.id);
+    try {
+      await onApply(job);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleStartQueue = async () => {
+    // Start with the first available job that hasn't been applied to yet
+    const firstAvailable = jobs.find(j => j.status === 'available' || j.status === 'expired');
+    if (firstAvailable) {
+      handleSingleApply(firstAvailable);
+    } else {
+      alert("No available jobs to start the queue.");
+    }
+  };
+
   const filteredJobs = useMemo(() => {
     if (activeFilter === 'all') return jobs;
     return jobs.filter(job => job.status === activeFilter);
@@ -132,11 +156,25 @@ export const AutomateTab: React.FC<AutomateTabProps> = ({ onApply, jobs, setJobs
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       <header className="space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight dark:text-white flex items-center gap-3">
-          <Globe className="w-8 h-8 text-indigo-600" />
-          Intelligence Sourcing
-        </h2>
-        <p className="text-gray-500 dark:text-gray-400 text-lg">Automate job discovery using site-specific scrapers or Gemini AI.</p>
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <h2 className="text-3xl font-bold tracking-tight dark:text-white flex items-center gap-3">
+              <Globe className="w-8 h-8 text-indigo-600" />
+              Intelligence Sourcing
+            </h2>
+            <p className="text-gray-500 dark:text-gray-400 text-lg">Automate job discovery and batch apply using site-specific scrapers or Gemini AI.</p>
+          </div>
+          {jobs.length > 0 && (
+            <button 
+              onClick={handleStartQueue}
+              disabled={isGenerating || jobs.filter(j => j.status === 'available' || j.status === 'expired').length === 0}
+              className="hidden md:flex items-center gap-2 px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 shadow-2xl shadow-indigo-600/30 transition-all active:scale-95 disabled:opacity-50"
+            >
+              <PlayCircle className="w-5 h-5" />
+              Start Application Queue
+            </button>
+          )}
+        </div>
       </header>
 
       {/* Provider & URL Input Area */}
@@ -183,8 +221,10 @@ export const AutomateTab: React.FC<AutomateTabProps> = ({ onApply, jobs, setJobs
 
           <div className="flex items-center justify-between text-xs text-gray-400">
             <div className="flex items-center gap-2">
-              <Info className="w-3 h-3" />
-              <span>{selectedProvider === 'custom_ai' ? 'Gemini will analyze the page content to find job details.' : 'Optimized parser active for selected site.'}</span>
+              <span className="flex items-center gap-2">
+                <Info className="w-3 h-3" />
+                {selectedProvider === 'custom_ai' ? 'Gemini will analyze the page content to find job details.' : 'Optimized parser active for selected site.'}
+              </span>
             </div>
             {jobs.length > 0 && (
               <button onClick={clearJobs} className="text-red-500 hover:text-red-600 font-bold flex items-center gap-1">
@@ -227,56 +267,94 @@ export const AutomateTab: React.FC<AutomateTabProps> = ({ onApply, jobs, setJobs
       {jobs.length > 0 && (
         <div className="space-y-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-gray-800 p-4 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
-            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 pl-2">
-              <Filter className="w-4 h-4" />
-              <span className="font-bold text-sm">Status Filter:</span>
+            <div className="flex flex-1 items-center gap-4">
+              <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 pl-2">
+                <Filter className="w-4 h-4" />
+                <span className="font-bold text-sm">Filter:</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(['all', 'available', 'expired', 'applied', 'skipped'] as const).map(type => (
+                  <button
+                    key={type}
+                    onClick={() => setActiveFilter(type)}
+                    className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                      activeFilter === type 
+                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' 
+                        : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {type} ({type === 'all' ? jobs.length : jobs.filter(j => j.status === type).length})
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {(['all', 'available', 'expired', 'applied', 'skipped'] as const).map(type => (
-                <button
-                  key={type}
-                  onClick={() => setActiveFilter(type)}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                    activeFilter === type 
-                      ? 'bg-indigo-600 text-white' 
-                      : 'bg-gray-50 dark:bg-gray-900 text-gray-500'
-                  }`}
-                >
-                  {type.toUpperCase()} ({type === 'all' ? jobs.length : jobs.filter(j => j.status === type).length})
-                </button>
-              ))}
-            </div>
+            
+            <button 
+              onClick={handleStartQueue}
+              disabled={isGenerating || jobs.filter(j => j.status === 'available' || j.status === 'expired').length === 0}
+              className="md:hidden flex items-center justify-center gap-2 w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg disabled:opacity-50"
+            >
+              <PlayCircle className="w-5 h-5" />
+              Start Queue
+            </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredJobs.map((job) => (
-              <div key={job.id} className="bg-white dark:bg-gray-800 p-8 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col hover:shadow-2xl transition-all relative overflow-hidden group">
+              <div key={job.id} className={`bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-sm border transition-all relative overflow-hidden group flex flex-col ${processingId === job.id ? 'border-indigo-500 ring-4 ring-indigo-500/10 scale-[1.02]' : 'border-gray-100 dark:border-gray-700 hover:shadow-2xl'}`}>
                 <div className="mb-4 flex justify-between">
                   {getStatusBadge(job.status, job.deadline)}
                 </div>
-                <h4 className="font-bold text-xl dark:text-white leading-tight mb-4 group-hover:text-indigo-600 transition-colors">{job.title}</h4>
-                <div className="space-y-2 mb-8 text-sm text-gray-500 dark:text-gray-400">
-                   <p className="flex items-center gap-2"><strong>Location:</strong> {job.location}</p>
-                   <p className="flex items-center gap-2"><strong>Student Type:</strong> {job.studentType}</p>
-                   <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl text-xs italic">
-                     {job.description.substring(0, 150)}...
+                <h4 className="font-bold text-xl dark:text-white leading-tight mb-4 group-hover:text-indigo-600 transition-colors h-14 line-clamp-2">{job.title}</h4>
+                
+                <div className="space-y-2 mb-8 text-sm text-gray-500 dark:text-gray-400 flex-1">
+                   <p className="flex items-center gap-2 truncate"><strong>Location:</strong> {job.location}</p>
+                   <p className="flex items-center gap-2"><strong>Target:</strong> {job.studentType}</p>
+                   <div className="mt-4 p-5 bg-gray-50 dark:bg-gray-900/50 rounded-2xl text-[11px] leading-relaxed italic line-clamp-5 border border-gray-100 dark:border-gray-800">
+                     {job.description}
                    </div>
                 </div>
+
                 <div className="mt-auto pt-6 border-t border-gray-100 dark:border-gray-700 flex gap-3">
                   <button 
-                    onClick={() => onApply(job)}
-                    disabled={job.status === 'applied'}
-                    className="flex-1 py-3.5 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 disabled:opacity-30 transition-all flex items-center justify-center gap-2"
+                    onClick={() => handleSingleApply(job)}
+                    disabled={job.status === 'applied' || (isGenerating && processingId !== job.id)}
+                    className={`flex-1 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-xl ${
+                      job.status === 'applied' 
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none' 
+                        : processingId === job.id 
+                          ? 'bg-indigo-500 text-white'
+                          : 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95'
+                    }`}
                   >
-                    {job.status === 'applied' ? 'Applied' : job.status === 'expired' ? 'Apply Anyway' : 'Apply Now'}
+                    {processingId === job.id ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Composing...
+                      </>
+                    ) : (
+                      <>
+                        {job.status === 'applied' ? 'Applied' : <><Sparkles className="w-4 h-4" /> Apply Now</>}
+                      </>
+                    )}
                   </button>
                   <button 
                     onClick={() => setJobs(jobs.map(j => j.id === job.id ? {...j, status: 'skipped'} : j))}
-                    className="px-4 py-3 text-gray-400 hover:text-red-500 transition-colors"
+                    className="p-4 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-2xl transition-all"
+                    title="Skip Position"
                   >
                     <Trash2 className="w-5 h-5" />
                   </button>
                 </div>
+
+                {/* Processing Overlay */}
+                {processingId === job.id && (
+                  <div className="absolute inset-0 bg-white/40 dark:bg-black/40 backdrop-blur-[1px] flex items-center justify-center z-10 pointer-events-none">
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-full shadow-2xl animate-bounce">
+                      <Sparkles className="w-8 h-8 text-indigo-600" />
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

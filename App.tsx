@@ -104,7 +104,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleGenerate = async (overrideJob?: Partial<JobApplication>) => {
+  const handleGenerate = async (overrideJob?: Partial<JobApplication>): Promise<void> => {
     const desc = overrideJob?.description || jobDescription;
     const recipient = overrideJob?.recipientEmail || recipientEmail;
     
@@ -218,12 +218,14 @@ const App: React.FC = () => {
       <div className="max-w-6xl mx-auto p-6 md:p-10 h-full">
         {activeTab === 'automate' && view === 'form' && (
           <AutomateTab 
-            onApply={(job) => {
+            onApply={async (job) => {
+              // Ensure we transition to loading immediately
               setJobDescription(job.description);
-              handleGenerate({ description: job.description, sourceJobId: job.id });
+              await handleGenerate({ description: job.description, sourceJobId: job.id });
             }} 
             jobs={automatedJobs}
             setJobs={setAutomatedJobs}
+            isGenerating={isGenerating}
           />
         )}
 
@@ -371,7 +373,17 @@ const App: React.FC = () => {
 
         {view === 'canvas' && application && (
           <div className="h-[calc(100vh-80px)] -m-6 md:-m-10">
-            <EmailCanvas emailBody={application.generatedEmail} recipientEmail={application.recipientEmail} subject={application.subject} onUpdate={(body) => setApplication({...application, generatedEmail: body})} onUpdateRecipient={setRecipientEmail} onUpdateSubject={(subject) => setApplication({...application, subject})} onSend={handleSendEmail} onBack={() => setView('form')} resumeContext={resume?.content || ''} />
+            <EmailCanvas 
+              emailBody={application.generatedEmail} 
+              recipientEmail={application.recipientEmail} 
+              subject={application.subject} 
+              onUpdate={(body) => setApplication({...application, generatedEmail: body})} 
+              onUpdateRecipient={setRecipientEmail} 
+              onUpdateSubject={(subject) => setApplication({...application, subject})} 
+              onSend={handleSendEmail} 
+              onBack={() => setView('form')} 
+              resumeContext={resume?.content || ''} 
+            />
           </div>
         )}
 
