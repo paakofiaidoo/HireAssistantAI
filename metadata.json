@@ -1,0 +1,5 @@
+{
+  "name": "Hire assistant AI - Smart Job Application Assistant",
+  "description": "An AI-powered job application suite that analyzes your resume, generates persuasive cover emails, and handles job application logistics with built-in SMTP support.",
+  "requestFramePermissions": []
+}
